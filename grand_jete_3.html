@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GRAND JETÉ — para Mica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#fff6d8;
+    --gold:#ffd23f;
+    --rose:#ff7eb6;
+    --sky:#3aa6f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:#0a0a14;overflow:hidden;font-family:"VT323",monospace;}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:#0a0a14;
+    background-image:repeating-linear-gradient(45deg,#0d0d18 0 12px,#0a0a14 12px 24px);}
+  #wrap{position:relative;width:min(100vw,1024px);aspect-ratio:16/9;
+    box-shadow:0 0 0 4px #1a1a2e, 0 0 0 8px #ffd23f, 0 24px 70px rgba(0,0,0,.7);overflow:hidden;}
+  canvas{display:block;width:100%;height:100%;background:#3aa6f0;
+    image-rendering:pixelated;image-rendering:crisp-edges;}
+
+  /* HUD */
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:flex-start;padding:12px 16px;pointer-events:none;color:#fff;}
+  #hud .lvl{font-family:"Press Start 2P",monospace;font-size:clamp(8px,1.5vw,12px);
+    color:#fff;text-shadow:2px 2px 0 #c0392b, 3px 3px 0 rgba(0,0,0,.4);letter-spacing:1px;}
+  #hud .stats{display:flex;gap:16px;align-items:center;font-family:"Press Start 2P",monospace;
+    font-size:clamp(7px,1.3vw,11px);}
+  #hud .stat{display:flex;align-items:center;gap:6px;text-shadow:2px 2px 0 rgba(0,0,0,.5);}
+  #hud .stat b{color:var(--gold);}
+  #hearts{letter-spacing:3px;font-size:clamp(11px,2vw,16px);}
+
+  /* Overlays */
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;color:#fff;padding:5%;gap:16px;
+    background:rgba(8,10,24,.82);}
+  .screen.hidden{display:none;}
+  .garland{position:absolute;top:0;left:0;right:0;height:42px;
+    background:repeating-linear-gradient(90deg,#c0392b 0 10px,#2e86de 10px 20px,#27ae60 20px 30px,#f1c40f 30px 40px);
+    image-rendering:pixelated;opacity:.9;
+    -webkit-mask:repeating-linear-gradient(90deg,#000 0 6px,transparent 6px 12px);
+            mask:repeating-linear-gradient(90deg,#000 0 6px,transparent 6px 12px);}
+  .garland.bottom{top:auto;bottom:0;}
+  .screen h1{font-family:"Press Start 2P",monospace;font-size:clamp(20px,5.5vw,46px);
+    line-height:1.25;color:#ff3b30;text-shadow:3px 3px 0 #fff, 6px 6px 0 #1a1a2e;letter-spacing:1px;}
+  .screen .kicker{font-family:"Press Start 2P",monospace;font-size:clamp(8px,1.6vw,12px);
+    color:var(--gold);text-shadow:2px 2px 0 #1a1a2e;}
+  .screen p{max-width:42ch;font-size:clamp(15px,2.6vw,21px);line-height:1.35;color:#fff6d8;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;
+    font-size:clamp(13px,2.1vw,18px);color:#bfe3ff;}
+  .controls span{border:2px solid #2e86de;background:#0e2a44;padding:5px 10px;}
+  .btn{pointer-events:auto;cursor:pointer;border:none;font-family:"Press Start 2P",monospace;
+    font-size:clamp(10px,1.8vw,14px);padding:16px 30px;color:#1a1a2e;letter-spacing:1px;
+    background:var(--gold);box-shadow:4px 4px 0 #b8860b, 0 0 0 4px #1a1a2e;
+    transition:transform .08s;}
+  .btn:hover{background:#ffe066;}
+  .btn:active{transform:translate(4px,4px);box-shadow:0 0 0 4px #1a1a2e;}
+  .fade{position:absolute;inset:0;background:#0a0a14;opacity:0;pointer-events:none;transition:opacity .45s;}
+  .fade.on{opacity:1;}
+  #touch{position:absolute;inset:0;display:none;pointer-events:none;}
+  #touch .pad{position:absolute;bottom:5%;pointer-events:auto;width:62px;height:62px;
+    background:rgba(255,255,255,.16);border:3px solid #fff;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:24px;user-select:none;
+    font-family:"VT323";}
+  #touch #tl{left:5%;} #touch #tr{left:calc(5% + 76px);}
+  #touch #tj{right:5%;width:88px;height:88px;font-family:"Press Start 2P";font-size:9px;}
+  @media (pointer:coarse){ #touch{display:block;} }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="wrap">
+    <canvas id="game" width="512" height="288"></canvas>
+
+    <div id="hud" style="opacity:0">
+      <div class="lvl" id="levelName">—</div>
+      <div class="stats">
+        <div class="stat"><b><span id="stars">0</span>/<span id="starsTotal">0</span></b> ◆</div>
+        <div id="hearts" class="stat">♥♥♥</div>
+      </div>
+    </div>
+
+    <div id="touch">
+      <div class="pad" id="tl">◀</div>
+      <div class="pad" id="tr">▶</div>
+      <div class="pad" id="tj">JUMP</div>
+    </div>
+
+    <!-- Title -->
+    <div class="screen" id="titleScreen">
+      <div class="garland"></div>
+      <div class="kicker">UNA AVENTURA EN DOS ACTOS</div>
+      <h1>GRAND<br>JETÉ</h1>
+      <p>Mica baila de la obra al faro. Tocá el suelo y recuperás dos saltos: el segundo es una pirueta en el aire. Juntá cristales, hongos, vino y bocados, rebotá en las telas de circo, y al final del camino hay alguien esperándote.</p>
+      <div class="controls">
+        <span>&larr; &rarr; / A D mover</span>
+        <span>&uarr; / W / espacio saltar</span>
+        <span>doble salto = pirueta</span>
+      </div>
+      <button class="btn" id="startBtn">EMPEZAR</button>
+      <div class="garland bottom"></div>
+    </div>
+
+    <!-- Interlude -->
+    <div class="screen hidden" id="interludeScreen">
+      <div class="kicker" id="interKicker">ACTO I COMPLETADO</div>
+      <h1 id="interTitle">II</h1>
+      <p id="interText"></p>
+      <button class="btn" id="interBtn">SEGUIR</button>
+    </div>
+
+    <!-- Win -->
+    <div class="screen hidden" id="winScreen">
+      <div class="garland"></div>
+      <div class="kicker">FIN</div>
+      <h1>&hearts;</h1>
+      <p id="winText"></p>
+      <button class="btn" id="winBtn">JUGAR DE NUEVO</button>
+      <div class="garland bottom"></div>
+    </div>
+
+    <div class="fade" id="fade"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+const W = 1024, H = 576;                 // logical world units
+const PX = cv.width / W;                 // backing scale (512/1024 = 0.5) -> chunky pixels
+
+// ---------- hand-drawn pixel-art sprites ----------
+const SPR_DATA = {"barrier": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAQCAYAAAAI0W+oAAAAuUlEQVR4nGNgGAVkAkYYw0ZD7T8tLNh0aA8DAwMDAwuy4CwRPjhbYt06FA0vgoJQ+MTI+9m5wPlMFDiWJDBqEUGwyCUCqzjWVGcTkcbAwMDAcGTFLJIsgelD1ouR6o7cuIWwlIHhP0xjR0MJXJygRVB9yOYJickxMDBgCbqKhh6y8hO6PnQ+1jhC9gUxFiOr6WgoYcQWCkz4NJBiGboedH0YPkJWTEz84HIEul64RYRcTchAXI6C6QMANt9O9BevhtMAAAAASUVORK5CYII=", "bricks": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAAdElEQVR4nGNgGOqA8cKJHf9paQHLnwUTMAUTChioJc7y5NELDAkFBgYGaokzXXn1AUOCgYGBgVriTDpiAlglqCXOCGOcyfDAiGxK4gIWZCwwSVrFBROMQau4YLpwYsf/Cyd2/KdVXDBSO+zRxUfzAUFxmgMAC192DXjLYYsAAAAASUVORK5CYII=", "cone": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAWCAYAAADJqhx8AAAAxElEQVR4nGNgGNRgX4jA//+LAv7jU8OITZOeGg9WxcIaJgyMcRtQ9GAYgM0gbBoHjwuwavz/7QZ2jCVAsZr6/9sNrCHPyKWBoZ7iMGBCV+S05gPjpVtfiNKM1QCYCwyWczEYLOdiYGBgYDBYzsUgW3+NAVsYsGB1KwMDw4XIb1jZBF1AKhhkBuCLQgYGBoa3N85gBCSKAbiiEAYIpoMBcQGc86ZKBm/Jgw5E2p4wwg3YFyLw/8aLP6ToZ9CQYGFwWvOBEQB5lXPLZaPtfAAAAABJRU5ErkJggg==", "crystal": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAqElEQVR4nGNgoCUQMvH5L2Ti8x+fGiaa2t7/+P9/+fwVeF3Bgkvz29ObGUyXP2QQNbeACf9/d2YLI9E2myx78P//fwhtsuwBTpewoGuuXb8Zzjdd/hDOxuUSFnTNSw8jNKEDbIawEKsZlyFMDAwMDO/ObGFsDvRliLaVJ2jA65MnGD4fXcIAcwE8HRBjCLpmFAMIGYJNM06AHJX4opAoQ8jSjGwIzTMTAEmxg94QNzpWAAAAAElFTkSuQmCC", "gourmet": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAl0lEQVR4nGNgGFIgrMfq/8Bo/l/R9P+ahglWA5iIMeD6hk045Rjx2vz5CFZbGXlt4PqwuqAiSuP//+93/jOwSDBgwxVRGnCDWbBpbm9LYmB4uQ6f4+AAwwAGBgaG6ycuEKUZpwGaFgb4dW06h9uAjmU3GOP8LpAf56QCeHTcuXSdJFtV9DQZ4QZMmzibLCdn5afiTUdEAQDi+S4cQLdlIgAAAABJRU5ErkJggg==", "mauri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAkCAYAAACNBsqdAAABtklEQVR4nNWWMUvDQBTHLyFDBylOEkoIGRxEpJOjSGfp4OQUHJ2kk3TwE4g4lU6OpR9ARJyLiJODlA4dHEIIITiVTJ0ah/Ji8vLe3bVFwf907+Xld/+7dzliCE0deI0MxpMgNlT15qpQKqYknVkHwLlnwRj6dHuej9vdgRKuBBeBWDABBSb3WGcLVPXS5oHbo8v7Uh5i2Wq0TsVr/0IaU7Ko5CSIDby854dpPj453avUYwbbPNd2MiGEqNcW5JLb3YFI58sFh0mkDwZ4vbZgn6dzk4SSYNd2sjCJDHAMeun5+fi4Myy9A/XFSUjw9pVfys3uhrhMUDVFcKl52CUAMYR7VnRdOW4Yst+/rkCpOhznYM5tHIQkGNdhTskx5aLhuSxU5tqUudVxzLnOHav2jBP3nilzu4rwe5YQ6PCvhV3qEdrR8+lLCJR+qve3vks3lwXrbsmMyZNg+Hpc28mcZivPR+ORKMaQo+4WrYt+HVlhEhne2c3GIMz5Ncd/D8aNA0XjUSl2mq3KlSAFb6r/B5Z+0uLr/We8c6jOF8Q6duwtchIurw2mxP1DUHkW/PYxNaiYy2N9A7EPxCae8kmkAAAAAElFTkSuQmCC", "mica_hairhang": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAoCAYAAAD6xArmAAACJklEQVR4nNWWv0vDQBTHvwluBnFwCEGCU7KKOvgnBNTVoa5OTiIi/iJDURGpIg7i1M0ODh2qhU5OXSxaMrg0kwQpnRxsh049B028JJfcpSLig3Dh3t3nfe/l5SWAoG1bBsnNaeRqdZ6IrJdFwVktE1ifUPDy+ia0VkpzblsG99jHNZfJSFQsAk1bNyKyGQD2Dw+C+4O9fe565jFoFTQwanSAaEr+pirS1PL8v6/YUHWhKrBW7NDIBTerBRiqTugArKdfu84H4+hD2EfvlemJZrWAZrWAstNH2eknqnk+rQMAdiqfgctOP2D0nm4I8FVudKRmtRAAZhY2AQA9mf0olMEguKf3KbPLUqj2kgIYS1tCQF+I2/Ek5gsSDcACJwH9udQmZKg66ckyNE1Hu+2FfO7tCRMoBAYATZtilqEyGDCBQuAkKG3t9ku2tvlT+3/gWH7I7h3B9CTgvEJ49GFHi8nlRnbvhJoRUyUFjqWCdrLMLK5xoUwwz1p2KRHOBUejm8U1YHL882LAWaccuip4yrmvNPDdlFp2KeYz8zkA8X4hrLhllwJIdL5ll2KfNi7YUHXiK02C+77YpymrmfkcW/1FJYAPBXY7nuR2PImGdysNdIv3eJxeH14xHcDM59CtNELz79YZ+XETcjueNOech+bGahv8ajNUnZDLOiGXdZL2U5OpKoKKmFC4AqJ1zP0/juZP1FJz8W6dxY4ulD9wUhGFiEIB4ANEVvCRs7ruTAAAAABJRU5ErkJggg==", "mica_idle": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAiCAYAAABbXymAAAACGElEQVR4nM2WPSzDQRjGnzYGoekgBkPTdGoHS4PRLE2YRAxlMhBiaMTgK4YGkQYxCGHoJAYJQ5F0MlkIYuiikzQiBjFoB5MaeM97X/+rxuBJmrvr3f3uvee9a88Hi2YS0SrVSy8VrT/cGhD11XzRp/b7bWBSJNTiGmKUEcyjfXh8dUL4eFKDa9LC8hIAYHQsJb7b290EAOzvbFgXdoJVGJfXbjTTaVuRUAuGx6ecCy7NL4g6T6I1ebV46yXnqVCVGFqUSps0KwA5y5Q8k5ovgdnclxXqWf51xABQWL8A8AM1yRhxtC1c7Y83ivbx3Ttuz9ZEu6N3Gmo/ABSfS4JnBROoo3faGpW6GAdrVnAoKRiKoOL3ax9alMpoW1jkRgITVJ3w9FSyRk1jKBiCa1ao8IrfnN/Ax4eo8x0GOgd9RnDl5lBsxwYnqGoZ91kC0zZME1R48SQj9QOOU8ETwBdoPmqSxsWyEyDLONAKBoDCQKbaf7El4CqUw+9Htr9AK3213bzj7kljpFwENcnzShO8HmngwkBG+5upRdW5U2meMeL2wR6pRDzkXRpkTJ4qOin3iwfiu1g6aTwNnhGrUA6sVXX9Hv85OJZOSm1+meoGq3a47PkfVkj6fhTa7PAEixPBXpaxdBLl3BXK2XNcx1PWuc4nVjl3JbVV2HU8hWBefzF5XpC3xIa2za67TQkezE8ZGc6bx+E2iEmfwqvWhLCTSwkAAAAASUVORK5CYII=", "mica_jump": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAiCAYAAABbXymAAAABzUlEQVR4nO2VMUvDQBiGnxYHwQpSHARDcWrWUsXfUBAcHBzUwUmxiIg4qA0dpIKDioggOoiDODg4FAV/gIuipYOLTiIKDuKgHTo1DjXXXHJHUtGt75LLd5fn3nsvuURQKNmTsAFKFxuiFusfjTh97jpAemgRgMe354hTi+CR7sGRVLu4PytX0U2sBVfuTm2nXchZov78XhHtRHdMtK21AumhRcktQNTr1lmWDuq9L+QsShcbIj4l2DsrQJ8R95Z8UjlWZuzOU+UY5DgA1i8fJVab94H6zEmxLGutAMDU9LwYc7C/DcDx3hZPLx/KVfjAOjkwt3RQUESxlKm77TPiTMwsBE7o3mR3HFHl6AA3YaQF65QZz0tXnXxRQCMOaGyeSh3XsFysR+F9K5p2DHC/eQU0oI6SPQnbPi3bWscguz4rV6VzQXd23KbmRU0LtlfO7d6jWQBitZqvvxKtL/Z1chfzMCtBA8G6Pp+MLgC+ijeiFPoDCaOB8rZoKx035fZH5mEWaBxkf+Y48DwW52rKINRVI/Efe9gpYs4N85A/UQ40V8e07rTgz8yWyLRzeFAJCwsUYDfUkXt3m4FJYJAdO9DfApXy/hBbaqmlf9I3Mry40cn/oVcAAAAASUVORK5CYII=", "mica_run_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAiCAYAAABbXymAAAAB/klEQVR4nK2WvUsDQRDF34mFYLAIFiISUsU2qH9EwE7EQi3EQrELYuEXFqIgoiGFKFpYiYWFRTBgZWWjaEgRhaQKQQ8LsdAUdmdhZt3dzN6u0dfc3n785u3M7XIeQrSYSgTUrr3Wm8Zj3RHR3rqsePJYWxiYFO+LukxTZATLbqtPb1aQPB8A2l2ir25uAABmZtOi7+gwCwA4OciwgZ3AOkyWaTce10nbivdFMTk3bw24sbIq2lTE0OK55NYkp69CV2piTXlyYlMBqFWm4nHqvAGWct+pkL/llhwDQGn3GsAPVBfrONETCwr5HaUo58VPFPI74n1geAEjyQ5lnFR5qXmhYALYpAdkwRy03sZnzPerHq2hAJHBMQ/QDogMJZmgANDbGw98v+pVXmpew4gouFilQ11SoIsCAEzx6vdngS0FsigduppWUo7K0/tOLoPli4DrZy+hxpaC56k9K/ih8sj2s3s1uTCJm9/yyZPFuf4T2JQGFvzbNJBKo9vKun9JBSfjtUlK9MSC8tqpeO9fHxdt+UDoCnVMd4AuCmQat4JlCKC6lft/Bba5tc0Ldcy5dXXNgoUL6d8MMBeLc210fJdM4+P4Ch+5W8Wlq2sWfJdMN72T2ybXjV3pro3f4XsqIyYOFbMKkCCyAX2O9YC4BCZ1Xc7//b9iqJg1QgHgCzv53YIB/yloAAAAAElFTkSuQmCC", "mica_run_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAiCAYAAABbXymAAAACBElEQVR4nK2WvUvDQBjGnysOgsFBHEIpoVNci/pHFOrk4KDOiptIB79wEBUHLW6ig5M4dHAQBScnF0Ulg4uZSiiSQRy0g1PPod55uY9cgj5Qmlze/N6nz70NITBouepTdhy9dZTr3rDDj3evQyJfL5jATOXSkK1EKy1YdNtqv1shYj1Tn+2m9e0tAMDc/CJfOz46AACcHjaMja1gGSYq7dcoobOfVS4NYXZhydpwa22dH4ubaNy8LNmmyToVsqozG4lvk5QogOQus83TaeAOWLnoRSHPcsKx73rUdz1ldGQ9798C+IVaHXcemxwqbsp58IWnqz1+PlqrY7LSn7gOAGEccZ4CHq3V+XkYR6RYLFOn29W6kpuJ4EQUztgUYUCxqFMoaD+iCaAXpdaxrGKxbM3b6Xa5c9YojCOSe9zSxBr4rkf/7Pj1tUV816Ni3s7YlNkxXb20QlldGEeExcD2yeiYNgOKoJ2FDbIzke1Bn9VtWr0+ikopD1er9Kn4QwMFTJtBrhj4fVIc/zrHolLnGEj+TV82zvj6yOZ04tkgK9Uxg4pAU9NcYJ1L3XousOwmr+tUxzq3WV1rwSYXymb9vL/p6o2OTdmy88+Le3ye3OChspjNMe8uvE2KbsM4IjJMB1fm0Hc9KhaOBwcJsK5m8HpJ4SgLH9WGkpfuRpuUKGQIc5xX3+pO3OZJkNiPAAAAAElFTkSuQmCC", "mica_vertical": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAiCAYAAABbXymAAAABeklEQVR4nGNkIAJ88uj7D2Pz7Shi/L/qwn/GMANGfHrwSqIbig74dhTh1M9EyGCTCxPIspSgwQwMDAy8fmYMvH5mGJbgs5SFGIPRLYGDC7jVEeVicsDAG6zeFMVws24ZCv/Wi0fkpwpyAUGDb714xKjeFEV9g8kFA2OwmoTc/y9nV+HMXWoScpTlPAYGBowUcW5rD171AxMUX5iYGNR8y7DKqfmWMXxhwq2dZi7GWx5LSSngjBwYePbsAVYzhlk65vn3D69mfPJYw+d/1Zb/DAYyDAwXnjAQpGEGtfmgmIXbxTBNhGgcAKvB6LYTAtjUYzW4wkONYDIjpB5nUFSeKyLKUFzq6JfcYN5SkBFi+Br8DQPbritBodH1EXTxgyfvsIrvWNqEQhPtYmLAld4jBNVgGNyx4xY86bRU12DVpFNsw8DAwMDAfRK7PqwGkwIqN2G3mIEBT7GJHBnrLvxAqYqMvEsYggw44Hx01+I1GBlgqzTxtYIYGBgYAG3MjSRvdS0kAAAAAElFTkSuQmCC", "mixer": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAYCAYAAADkgu3FAAABW0lEQVR4nN2Vr27DMBDGv0xDwcHD1lQ0FKkpLSgKmqaoaOojVNEeocCPUA1V0RQUVFBal1VF1WQ8HDyage0iK/W/tKsm7UOOfXc/+3znAP9NQR9jwaOmO5fMa68Yt30AL0VoXHMBnbsRPGqGkzFGU2G02a4S7NYbK+zmUggAjKYCw8lYm1ov0G/KCLLtziaTnxYkeNQMWIQBi7Bbb7BdJdbgdEfko4OdXB5BVB1lDUBfdYvsEwCg81GLw6u8Kcgiq41rLhnviE6hjikopchkH+chZq93YPcPbQq9UuerOP9ObfqYtXNVWQC4QnmrEPVb28nnnCrOwxOIKu2JknkdqDk/R1JKNwgA+D7FJTDGmB9IhbmAR1lj+fzRXnxXVVm4+4iaTnAYnyS+T39GB1Rloa06bTGkT7MGAKq3ZeAz311T+0e+HwLA82XoKwqu6u9+E7b02ET25O8EXUtfIpmbT/U+UKwAAAAASUVORK5CYII=", "mushroom": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAoklEQVR4nGNgwAMiBOT+RwjI/cenhhGXxi5tWRSxsquPGVZ8eIShHkUAplHW1hZVVX0GAwMDA8Njl2gMgxjRNTMwMDDI7lkK14ANIBvCiMvJhAyCGcKETRNMI7pmdDkGBgYGFnQDkDWg24zNJSgGnHv6HkMBNmAkLYhfQUWSw/8XN7fC8cntXf8rkhywpgeMMCAVjBqAJR3AwITObkrNJg4AAPaiSmW3ANwdAAAAAElFTkSuQmCC", "onix_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAUCAYAAACJfM0wAAAA2klEQVR4nGNgwAKkpBT+YxMnRQ0TNg0GClKEzGUwUJDCazgLNsF7774xaGgY4HXRvXff8FqM1eBPnz7g1YQOpKQU/j979oARWQwjKNAV4AMwtc+ePWBEDxYMg5E1NJ7TYmg8pwUXR+ajO4CPTwDFDKwGI9teb3QNRQ7GR3fhjRsXUFyN4W1sMb2/oIOBgYGBwXFCBYYjcAUdUQbjA8gGI0ciRZGHDDQ0DFBSBtYMQoqBMPXoSRRr5JEDCKZjcgA2X1LFYGzxQrWgGDUYJ8BabKIXKMhpFJ8cXQAA4CZabOayBUIAAAAASUVORK5CYII=", "onix_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAUCAYAAACJfM0wAAAAzklEQVR4nGNgwAKkpBT+YxMnRQ0TNg0GClKEzGUwUJDCazgLNsF7774xaGgY4HXRvXff8FqM1eBPnz7g1UQMwAiKZ88eMBKrGZ9aDIORNTSe02JoPKcFF0fmE3IAVoORI6Xe6BqKHIxPKFVg2IpNw/6CDgYGBgYGxwkVGAbgcjlRBuMD6AZLSSn8f/bsASNFkYfLIikphf8UuxiXY7BGHqVASkrhP9UNxhnG5BqGbCgDA5WCAmYYcljTJIyHpsFYi00+PgEUPnIxik+OLgAAIy9WGKA5ys8AAAAASUVORK5CYII=", "rig_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAoCAYAAADt5povAAABfElEQVR4nGNkwAMSMsr+45PHBRbM6GLEJYdTAgamzVv1X09Ph+HSpStEW5iVFIbTXCZiDCDFMkKAhRxNy5YsgbOjYmJoZyHMImRLsInhAwTjEBnYOPn9x2bwsiVLGI7s20SUWUTFIbpleno6KHJRMTEMNk5+RKVooi1EBpQkIrIspASQFYfoqZQmcQgDMMs6ujpQ+MQCknwIA8gJhFifwQDd45BsC+U+nWGwYbvBMCPFgqQCnuQgjTKR+m9nIMfAwMDAkDHnBMn6yfLhgyfvyNHGwMBAZqJhYCDfpxQlGnJ8OhqHOMFoHOICo3GIF4zGITYw/OOQ5KZ+lIkUvMJ99OYLw6M3X0jST1KQwiyTE+GBi8EsXHbmGVFmEW1hlInUf2SL0MGjN1+IspQoC5F9hi0IkcUJWUp0HMqJ8DAoyAgxdOy4hWEgzPfExCfRFuIzjFjLGBgGe7v00ZsvDBUeaijt0AoPtf+kZA2SUym+REO1VIpsKcwCGCA1HwIAClG7MzwR4rAAAAAASUVORK5CYII=", "rig_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAoCAYAAADt5povAAABd0lEQVR4nGNkwAMSMsr+45PHBRbM6GLEJYdTAgamzVv1X09Ph+HSpStEW5iVFIbTXCZiDCDFMkKAhRxNy5YsgbOjYmJoZyHMImRLsInhAwTjEBnYOPn9x2bwsiVLGI7s20SUWUTFIbpleno6KHJRMTEMNk5+RKVooi1EBpQkIrIspASQFYfoqZQmcQgDMMs6ujpQ+MQCknwIA8gJhFifwQDd45AiC+U+nWGo8FD7PyPFguhCnqTgiDKR+m9nIMfAwMDAkDHnBFnRQbIPHzx5R449cECWK2GAHB9TnGhI9fFoHOIFo3GIDYzGIUEwGofoYDQOUUCUiRTWinbZmWdEm0OWD+VEeOAYn0OwAaJdFmUi9R9mATbw6M0XonxKlIUwH8iJ8DA8evMFQx5ZnJClRPee5ER4GBRkhBg6dtzCMBDme2yOIdtCfIYRaxkDw2Bvlz5684WhwkMNJUVWeKj9J9Z3DAxkpFJ8iYZqqRTZUpgFMEBs6oQBALRCtDJf0LfsAAAAAElFTkSuQmCC", "runa_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAUCAYAAACJfM0wAAABBUlEQVR4nGNgwAKkpBT+YxMnRQ0TNg0GClKEzGUwUJDCazgLNsF7774xaGgY4HXRvXff8FqM1eBPnz7g1HAskYvhytMvDGm7EJ6VklL4/+zZA0ZkdYwYOhmIC2MGBgYGZMPQDccIY2QNjee0GBrPacHFkfnoLuTjE0AxA6vByC6uN7qGIgfjo/vqxo0LjMhiGEGBLRj2F3QwMDAwMDhOqMBwBLrLSTIYH8AVzhhBgcsFhICGhgH+yCPVxTD16EkUa+SRA9B9SpbBxxK5GI4lcsH52HxJtouvPP0CZ2OLF6xZmhCwmv+NoJtwyiJ7lRxAtcgj2mCId8kHWMMYvUBBTqP45OgCAOrDZ/NQImUwAAAAAElFTkSuQmCC", "runa_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAUCAYAAACJfM0wAAAA90lEQVR4nL2Urw7CQAzGvxHUBEFXnSRTCxLHo8ygkTgyh+QNeA8MbnKKIJeZTS5kWbCHgtxYr7vx73Ptrb+23y4HMCJSmssP+WbEFYSK+rgIFYnwMZfMqhtms1CcKKtuYmMWXNdXa0ES+TgXDVbHzrIteVzSxWMAKMucrQcYj82COA0Qp8Ezb8YS1Ao2J97OL62zR9y3VacrV3Ba7wAAy/2mA7BN7gSW9AomUrosc69jRZ93Lo2IlP54Ytsw8mV8U0RKvwVOIh9J5FuhrMeuOhdNC2ZCgS/cCmCgx7ZVXfWTnyeCFwf5WewT+2xOJtNWbD6j0tlfdAe6mmBxCINHegAAAABJRU5ErkJggg==", "seal_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAAqElEQVR4nGNgGOqAkRLN0WkF/2XlFDDEHz96wLB01gRGBgYGBhZKLIAZhg8wUWoBMji4exvDwd3bUMQo9gEysHf1whBDiQNcYYoLYAue169ewdm7NixjxPABoTAlBETFxBgYGBjgkQyPg+i0gv8UmYwDUDUOYK5GBlRNRdgA3AJstpMCcOmnuQ9Q4uD1mzcYCkRFRLBqfP3mDVyOUt/jBG5BMTRJeSQBAK0gLxGbVKmaAAAAAElFTkSuQmCC", "seal_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAAp0lEQVR4nGNgGAUEACMlmqPTCv7LyilgiD9+9IBh6awJjAwMDAwslFgAMwwfYKLUAmRwcPc2hoO7t6GIUewDZGDv6oUhhhIHuMIUF8AWPK9fvYKzd21YxojhA0JhSgiIiokxMDAwwCMZHgfRaQX/KTIZB6BqHMBcjQyomoqwAbgF2GwnBeDST3MfoMTB6zdvMBSIiohg1fj6zRu4HKW+xwncgmIIpjwA1wIvEVjgI7EAAAAASUVORK5CYII=", "silk_rose_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAABOCAYAAABIb7SkAAABD0lEQVR4nO2YMQrCMBSGE/EQHRwLgksWt3R36SGcPYEKToJ6DA/Tbi4uhe7eow6i1GLzkkh55fF/W+nPy98k31KtItjOssYnd3kUOnT2NLzOi/P+4Hy/Ox2j5kYXil2QYjLI1D8gz7hYrhs7X/QHrPnsVp6kqp0t6+rrWVmj9GblXDP6yNq8L2+epF6X3UX4kVnjH3XtbA+ju0MCCpV3/2hdBY8XsEMDA8soBBSCZczAMgoBhWAZM7CMQkAhWMYMLKMQUAiWMQPLKAQUgmUdsttV935p5ydmSDa60K/B3lFYNgCwjEJAIVjGDCyjEFAIljEDyygEFIJlzMAyCgGFYBkzsIxCQCFYxgwsoxhdoSeQD11PQ22guAAAAABJRU5ErkJggg==", "silk_rose_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAABOCAYAAABIb7SkAAABWklEQVR4nO2aMU7DQBBFvxGHSEEZCYnGDd2mp8khqDkBIFEhASegRHScgT7uaNJESs89TIGInMDuzI61bBj+66KMxj8z+6TIdgMDl0ezXlP38L5ocnsf5sf55P76Jvn91d2tqa85kPWCEgdFuo5A3PHi9LwPxyfxgtBupjWfTDGs7darrc8ILZqLs+Q1zSsb8nV455Op6rCnyF9ZaPWlqclG2Lsz5CBQt9SXrlfZ7R1MqDC0TMJBIFpWGVom4SAQLasMLZNwEIiWVYaWSTgIRMsqQ8skHASiZTvM3p6b6C/duYmZU2sO9FNjdSktKwAtk1AFitrTLdE/vm7u3g8fQ2w9VlAapg70DYVpFsOAv7qy38QWSGGaxTDAzYQKQssknASiZRWhZRJOAv0ny7JeOIq+mBJadE8vGPtvERgzoYRpVsOAPVyZo0AJ06yGAa4mVAhaJuEoEC2rxAcgTndOAQvnsAAAAABJRU5ErkJggg==", "silk_teal_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAABOCAYAAABIb7SkAAABDElEQVR4nO2YsQ2DMBBFcZSKAlFmBleegpoRqJggdWRljFSMQM0gzJCaBUgRJSIo9tmO0HHRf62P43O+16CyBIq6nkPqpr5Xsb2P8XGeXLrOe35tmqS+yYFSX0hx2KTrD5ATOlk7F1XlPG+1fk8rNyZb1ubGfDzbap2dy9K7V8lXtuS1vLkxQcvuI/rKWq2Da32TdbG7HZIf6DaOwbXTMMS2/4MJbQ0so5AfCJZxA8so5AeCZdzAMgr5gWAZN7CMQn4gWMYNLKOQHwiWrblbq1xfuv6JGVObHOhb41Bg2RbAMgr5gWAZN7CMQn4gWMYNLKOQHwiWcQPLKOQHgmXcwDIK+YFgGTewjGJ3gR7+UmjhsoTmIwAAAABJRU5ErkJggg==", "silk_teal_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAABOCAYAAABIb7SkAAABWUlEQVR4nO2aMW7CQBBFxyiVC0SZM2y1p6DmCFQ+AXVkpaagpuII1D6Iz5AS+QJQoFiOld2ZHWuz7Oa/1sPwPTtPQsYVKVjvdndJ3XC9VqG938LjPPm4XLzXP/d7VV91IO0XcqyidF0AO6H3tr2vt1vn9caYcVq1tTStra398dnGGDpsNt69Uh/ZlO/lra0VLbuP4CNrjBHX+ibr4uV2KP9A574X1w5dF9q+gAnFBpZx5B8IlqUGlnHkHwiWpQaWceQfCJalBpZx5B8IlqUGlnHkHwiWzflq28p1p/OHmCG16kC/NZYCy2IAyzhEgVz2nPuejrfb+PR++jfE0HXjUksNEweaIzFNYxhRrkf2l6gCSUzTGEZUyoRiAss4yggEy1ICyzjKCPSvLAt64cj1YkpjDB1PJ1r6a5FowYR8pmkNI3rBIysnkM80rWFEJU0oFrCMo5xAsCwVD7xAg+BdgeWXAAAAAElFTkSuQmCC", "tramp_a": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAeCAYAAABXNvynAAACHUlEQVR4nO2Wr2sjQRTHv3OcDEsop0oIIawIFRUrSkV1OFWWJaoqOqIiHCWiIuLEUUJFRESpiCinwhJO3l9wKuLUiRBCRGQIS/2cCG86OzuzP5osobAftTuz++Yzb/fNDFBQUFBQcEzYvgGa1zc8y/O/f/3ca8zEl3v9Af/R/8aAnZzjOJjNZqLfcRxUa3Vxv1ouEu/V9ym+Ot67hEkUAFyvFen73r1LE0Jw//gQaZv6EwDpsh/7gCw6HfmZxLLidrxU4p91jWpGO22PnZ7YHACsUvmgosHrdifZfmGjsU/1wAG9eKRBls1TVIXE15s5G419bsr2J93LsqxVKucuC+wSYpXKOD2xeaftMV29AIpw8/qGk6wpMGXikNc6SFpdNrUZjkPO9qGuVRrnl8a1PSS8Wi5CnZUzG8HrNjEbh4DGqZzZoXbVKZLhqT+BVK2wKl+w3sxZXuIUd72Zs/VmLn5FufBkQsvav79/GABO0uPnJ9H3FswOfa6sBalOWpYkbrt3mPoTrJYLchJoi6txfsmrtXpoHTYJ0LKXFp0gQV/WJGsUJmkASCu+D6ooAK0skLA1X1x95UGwFfe3mnND1knI9UEMpfOFZZURBFujsHZrlnG9ljhNDR8fuOu1xJ5frdXR6w941tOaXEyu1wrJ9foDbbERqTJsmm3cehmHKV6aMRMz/N6B8yLzTndsPpxw5JPG/Zd5/gLHGjd3/gMn+jHCNqG4NAAAAABJRU5ErkJggg==", "tramp_b": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAeCAYAAABXNvynAAACJUlEQVR4nO2WsUvrUBTGvzzeKCFIJ5Eg4pBBOgQpHTo9pHaSEjo5lA4i4tBBRN7wBgcHKdKhg4M4FAenUorb61/QQTp06iClZHCSx+XiKFwHvfEm9yZNaDu9fBDCbXLO+fXLybkBUqVKlSpVqlSp/iNp8yYo7h+wJPf3Hx/mqhkazEibaUZN+31xza4uzjQOZ9s2hsOhd59t2zA3Nr21O53MXAfjeX4A4PV4/djAoriLZaciXTupOYkcu2l3pSfS63YAxHP/Z9TFIKgKzjJ3ErWEKofwJxjw+RTGo4ESXvkjI222V+0rQZMCztLYffJyc3Du+N/7IoJtIQGLrrbvbkEpwXg00KJA6RuJBaevGDPBc4USqx0ehbbJD1Vw2al8u0reJVfpG/EdcRUVZ5k7jNdpNRvK90UCLu4fMBGWuq/KgouSKh+veVJztLJTkcam0uGw5MtSktw+YHc6iUy4vZVfyjkKOsjka2grm2fmxqbXw7lCiVH3danuitJXDOhmBpQS1E/P0et2pBHnc3g8GmjudIJet/M9G43IUb1Q8UkRBguEzGHRaeDzBVhb3Vro/A3q5d+zJs7hsM0jdCu0snkGACL45en5UmD/NBsQQQEk2+m4coUSo5R46/oX8KLAOWjr6wwAum54m5UqRhprVjbP+EEp8Q3wVrMBdzqBvp6Bvp7BdiGHav04EWC1fuzF83wi3K/dXYlDzDHXt2kwWVyFuRdHH8h8OkBfOgwWAAAAAElFTkSuQmCC", "wheelbarrow": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAASCAYAAABB7B6eAAABLklEQVR4nGNgGAUEACMxiq5tqfiPTVzLp4OgfiZyDSckR5QFxBiAT01ITMZ/FmSBVU4qBA3EBpD1rZJyQZFjQVesIyHAwMDAwCBlpMbwbNkeBoYoF3QlKEDqxiMGBqgeBgYGhlUMDAxrlsyAxw1GJK1yUvmvg6SBgYEBtyXL9qBwr7z4wBC27w6KmRg+IMYgUgBGJIftu8N45cUHkg3C5noGBmJ9wMDAYLfrCZx9yE2GaItxZhRYXMAMFhGTgsu9efUMxSJcrmdgwOKDkJgMSJJ7tocBFlTIhsP4b149YyAmKLEG0ZolMxjXMDAwiIhI/Ec3HNmSrEvPGN68eYG3uECJZLjrcYCAsCj8ziVkAQMDaiZBBxtWLSPfAmyuf/PmBSMsQjHkXhEOHgYGBgYAgZ9s5XnEMqwAAAAASUVORK5CYII=", "wine": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAoklEQVR4nGNgwAOqvLT+V3lp/cenhgmf5INXn/BJMzAwMDAw4pIQUhD5L2KlwPDhwRuGP8++MLx78AarWrwuIAbQ3gABBRG88hj+ElIQ+e/XEMJwbNcZFHFcYTHwYYDVC/cOrcFQeO/WNQaXlDoML7DgMnmWbRYK32VuDlZ1FHsBpwvSDk9D4d+7dY14Awr2rcAajdgA9WOBgQESE9jEsWUoAOJ3ObSC/enBAAAAAElFTkSuQmCC"};
+const IMG={};
+for(const k in SPR_DATA){ const im=new Image(); im.src=SPR_DATA[k]; IMG[k]=im; }
+const SS=2;  // each native sprite pixel = SS logical units = 1 backing pixel (matches chunk)
+function spr(name,dx,dy){
+  const im=IMG[name]; if(!im||!im.complete||!im.naturalWidth) return;
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(im,Math.round(dx),Math.round(dy),im.naturalWidth*SS,im.naturalHeight*SS);
+}
+function sprFlip(name,dx,dy){
+  const im=IMG[name]; if(!im||!im.complete||!im.naturalWidth) return;
+  ctx.imageSmoothingEnabled=false; ctx.save();
+  ctx.translate(Math.round(dx)+im.naturalWidth*SS,Math.round(dy)); ctx.scale(-1,1);
+  ctx.drawImage(im,0,0,im.naturalWidth*SS,im.naturalHeight*SS); ctx.restore();
+}
+
+// ---------- Input ----------
+const keys = {};
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if(['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+  if(k==='arrowleft'||k==='a') keys.left=true;
+  if(k==='arrowright'||k==='d') keys.right=true;
+  if(k==='arrowup'||k==='w'||k===' ') keys.jump=true;
+});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a') keys.left=false;
+  if(k==='arrowright'||k==='d') keys.right=false;
+  if(k==='arrowup'||k==='w'||k===' ') keys.jump=false;
+});
+function bindPad(id,key){
+  const el=document.getElementById(id);
+  const set=v=>e=>{e.preventDefault();keys[key]=v;};
+  el.addEventListener('touchstart',set(true),{passive:false});
+  el.addEventListener('touchend',set(false),{passive:false});
+  el.addEventListener('mousedown',set(true));
+  el.addEventListener('mouseup',set(false));
+  el.addEventListener('mouseleave',set(false));
+}
+bindPad('tl','left'); bindPad('tr','right'); bindPad('tj','jump');
+
+// ---------- Levels (Acto I = Obra, Acto II = Cabo Polonio) ----------
+const ITEMKINDS = ['crystal','mushroom','wine','gourmet'];
+function withKinds(arr){ return arr.map((s,i)=>({x:s.x,y:s.y,kind:ITEMKINDS[i%4]})); }
+
+function makeLevels(){
+  return [
+    { // ACTO I — LA OBRA
+      name:'I · LA OBRA', theme:'site', width:5400, spawn:{x:90,y:380},
+      ground:[[0,900],[1040,420],[1620,360],[2120,300],[2560,520],[3260,360],[3760,420],[4380,820]],
+      platforms:[
+        {x:520,y:420,w:150,h:22,t:'beam'},{x:760,y:340,w:150,h:22,t:'beam'},
+        {x:1000,y:260,w:130,h:22,t:'slab'},{x:1480,y:400,w:160,h:22,t:'scaffold'},
+        {x:1740,y:320,w:140,h:22,t:'scaffold'},{x:1980,y:240,w:140,h:22,t:'slab'},
+        {x:2380,y:380,w:150,h:22,t:'beam'},{x:2640,y:300,w:120,h:22,t:'beam'},
+        {x:2880,y:220,w:160,h:22,t:'slab'},{x:3440,y:380,w:150,h:22,t:'scaffold'},
+        {x:3680,y:290,w:130,h:22,t:'scaffold'},{x:3920,y:210,w:150,h:22,t:'slab'},
+        {x:4520,y:380,w:160,h:22,t:'beam'},{x:4760,y:290,w:150,h:22,t:'beam'}
+      ],
+      tramps:[{x:1300,y:474},{x:2280,y:474},{x:4180,y:474}],
+      items: withKinds([
+        {x:560,y:370},{x:800,y:290},{x:1040,y:210},{x:1340,y:300},
+        {x:1520,y:350},{x:1780,y:270},{x:2020,y:190},{x:2420,y:330},
+        {x:2680,y:250},{x:2920,y:170},{x:3480,y:330},{x:3720,y:240},
+        {x:3960,y:160},{x:4560,y:330},{x:4800,y:240}
+      ]),
+      enemies:[
+        {x:1100,y:0,range:360,spd:1.1,kind:'cone'},{x:2160,y:0,range:240,spd:1.2,kind:'cone'},
+        {x:3320,y:0,range:300,spd:1.2,kind:'cone'},{x:4420,y:0,range:520,spd:1.0,kind:'cone'}
+      ],
+      cats:[{x:330,y:498,who:'onix'},{x:2950,y:220,who:'runa'}],
+      goal:{x:5160,y:0,kind:'flag'}
+    },
+    { // ACTO II — CABO POLONIO
+      name:'II · CABO POLONIO', theme:'dunes', width:5200, spawn:{x:90,y:380},
+      ground:[[0,1000],[1120,520],[1780,640],[2560,300],[2980,720],[3820,560],[4500,700]],
+      platforms:[
+        {x:560,y:430,w:150,h:24,t:'rock'},{x:820,y:360,w:140,h:24,t:'rock'},
+        {x:1300,y:400,w:160,h:24,t:'wood'},{x:1560,y:330,w:120,h:24,t:'wood'},
+        {x:2180,y:410,w:170,h:24,t:'rock'},{x:2420,y:330,w:120,h:24,t:'rock'},
+        {x:2640,y:250,w:140,h:24,t:'wood'},{x:3360,y:400,w:150,h:24,t:'rock'},
+        {x:3560,y:310,w:130,h:24,t:'rock'},{x:4180,y:380,w:160,h:24,t:'wood'}
+      ],
+      tramps:[{x:1700,y:474},{x:3060,y:474},{x:3900,y:474}],
+      items: withKinds([
+        {x:600,y:380},{x:870,y:310},{x:1360,y:350},{x:1610,y:280},
+        {x:1740,y:300},{x:2230,y:360},{x:2470,y:280},{x:2690,y:200},
+        {x:3120,y:230},{x:3410,y:350},{x:3610,y:260},{x:4230,y:330}
+      ]),
+      enemies:[
+        {x:1180,y:0,range:300,spd:0.9,kind:'seal'},{x:1850,y:0,range:520,spd:1.0,kind:'seal'},
+        {x:3050,y:0,range:560,spd:1.1,kind:'seal'},{x:4560,y:0,range:520,spd:1.0,kind:'seal'}
+      ],
+      cats:[{x:300,y:498,who:'runa'},{x:2700,y:250,who:'onix'}],
+      goal:{x:5020,y:0,kind:'mauri'}   // <- reencuentro final
+    }
+  ];
+}
+
+// ---------- State ----------
+const GROUND_Y=498, GROUND_H=H-GROUND_Y;
+const GRAV=0.62, JUMP=-11.4, BOUNCE=-16.5, MOVE=0.7, MAXV=5.0, FRIC=0.82, AIRF=0.9;
+
+let levels=makeLevels();
+let state='title';
+let levelIdx=0, level=null, cam=0, lives=3, collected=0, frame=0;
+let hurtLock=false;
+
+const player={x:0,y:0,w:30,h:46,vx:0,vy:0,onGround:false,jumps:0,face:1,
+  spin:0,spinning:false,anim:0,invuln:0,_jumpHeld:false};
+
+function loadLevel(i){
+  level=levels[i];
+  level.items.forEach(s=>s.got=false);
+  level.enemies.forEach(e=>{e.origin=e.x;e.dir=1;e.dead=false;});
+  document.getElementById('levelName').textContent=level.name;
+  document.getElementById('starsTotal').textContent=level.items.length;
+  respawn(true); cam=0;
+}
+function respawn(full){
+  player.x=level.spawn.x; player.y=level.spawn.y;
+  player.vx=0; player.vy=0; player.onGround=false; player.jumps=0;
+  player.face=1; player.spin=0; player.spinning=false; player.invuln=70;
+  player.idleT=0; player.hairhang=0;
+  if(full){ collected=0; updateHUD(); }
+}
+function updateHUD(){
+  document.getElementById('stars').textContent=collected;
+  document.getElementById('hearts').textContent='♥'.repeat(Math.max(0,lives))+'♡'.repeat(Math.max(0,3-lives));
+}
+
+// ---------- Collision ----------
+function solidsAt(){
+  const a=[];
+  for(const g of level.ground) a.push({x:g[0],y:GROUND_Y,w:g[1],h:GROUND_H});
+  for(const p of level.platforms) a.push({x:p.x,y:p.y,w:p.w,h:p.h});
+  return a;
+}
+function overlap(a,b){return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;}
+function groundTopAt(wx){
+  for(const g of level.ground) if(wx>=g[0]&&wx<=g[0]+g[1]) return GROUND_Y;
+  for(const p of level.platforms) if(wx>=p.x&&wx<=p.x+p.w) return p.y;
+  return GROUND_Y;
+}
+
+// ---------- Update ----------
+function update(){
+  frame++;
+  if(state!=='play') return;
+  const p=player, solids=solidsAt();
+
+  if(keys.left){ p.vx-=MOVE; p.face=-1; }
+  if(keys.right){ p.vx+=MOVE; p.face=1; }
+  if(!keys.left && !keys.right) p.vx*=(p.onGround?FRIC:AIRF);
+  p.vx=Math.max(-MAXV,Math.min(MAXV,p.vx));
+  if(Math.abs(p.vx)<0.04) p.vx=0;
+
+  if(keys.jump && !p._jumpHeld){
+    if(p.onGround||p.jumps>0){
+      p.vy=JUMP;
+      if(!p.onGround){ p.spinning=true; p.spin=0; }
+      p.jumps--; p.onGround=false;
+    }
+  }
+  p._jumpHeld=keys.jump;
+
+  p.vy+=GRAV; if(p.vy>16) p.vy=16;
+
+  p.x+=p.vx;
+  for(const s of solids){ if(overlap(p,s)){ if(p.vx>0)p.x=s.x-p.w; else if(p.vx<0)p.x=s.x+s.w; p.vx=0; } }
+  if(p.x<0)p.x=0; if(p.x>level.width-p.w)p.x=level.width-p.w;
+
+  p.onGround=false; p.y+=p.vy;
+  for(const s of solids){ if(overlap(p,s)){ if(p.vy>0){p.y=s.y-p.h;p.vy=0;p.onGround=true;} else if(p.vy<0){p.y=s.y+s.h;p.vy=0;} } }
+  if(p.onGround){ p.jumps=2; p.spinning=false; p.spin=0; }
+
+  for(const t of level.tramps){
+    const r={x:t.x-26,y:t.y-10,w:52,h:18};
+    if(p.vy>=0 && overlap(p,r)){ p.y=r.y-p.h; p.vy=BOUNCE; p.jumps=2; p.spinning=false; t.flash=12; p.hairhang=18; }
+  }
+
+  for(const e of level.enemies){
+    if(e.dead) continue;
+    e.x+=e.spd*e.dir;
+    if(e.x>e.origin+e.range){e.x=e.origin+e.range;e.dir=-1;}
+    if(e.x<e.origin){e.x=e.origin;e.dir=1;}
+    e.y=groundTopAt(e.x+18)-30;
+    const er={x:e.x,y:e.y,w:38,h:30};
+    if(overlap(p,er)){
+      if(p.vy>0 && p.y+p.h-p.vy <= e.y+14){ e.dead=true; p.vy=-9; }
+      else if(p.invuln<=0) hurt();
+    }
+  }
+
+  for(const s of level.items){
+    if(s.got) continue;
+    if(Math.abs((p.x+p.w/2)-s.x)<26 && Math.abs((p.y+p.h/2)-s.y)<30){ s.got=true; collected++; updateHUD(); }
+  }
+
+  if(p.y>H+40) hurt();
+  if(p.x+p.w>level.goal.x && p.x<level.goal.x+40) reachGoal();
+
+  if(p.invuln>0) p.invuln--;
+  if(p.hairhang>0) p.hairhang--;
+  if(p.onGround && Math.abs(p.vx)<0.3 && !keys.jump) p.idleT++; else p.idleT=0;
+  if(p.spinning){ p.spin+=0.32; if(p.spin>=Math.PI*2){p.spin=0;p.spinning=false;} }
+  if(Math.abs(p.vx)>0.3) p.anim+=0.25; else p.anim*=0.8;
+  for(const t of level.tramps){ if(t.flash) t.flash--; }
+
+  const target=p.x+p.w/2-W/2;
+  cam+=(target-cam)*0.12;
+  cam=Math.max(0,Math.min(level.width-W,cam));
+}
+
+function hurt(){
+  if(hurtLock) return; hurtLock=true;
+  lives--; updateHUD(); flash();
+  setTimeout(()=>{
+    if(lives<=0){ lives=3; levelIdx=0; loadLevel(0); }
+    else respawn(false);
+    hurtLock=false;
+  },520);
+}
+function reachGoal(){
+  if(state!=='play') return;
+  state='transition';
+  fadeTo(()=>{ if(levelIdx===0){ levelIdx=1; showInterlude(); } else showWin(); });
+}
+
+// ============ RENDERING (Wonder Boy / pixel) ============
+// palette helpers
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x,y,w,h); }
+
+function clear(){ ctx.setTransform(PX,0,0,PX,0,0); ctx.clearRect(0,0,W,H); }
+
+function drawSky(){
+  if(level.theme==='site'){
+    px(0,0,W,H,'#5bb8f0');           // bright blue
+    px(0,0,W,140,'#7fcdf5');         // lighter band up top
+  } else {
+    px(0,0,W,H,'#7fc6f0');           // cabo: sunny sky
+    px(0,0,W,120,'#a8defc');
+    px(0,300,W,80,'#ffd9a0');        // warm haze near horizon
+  }
+  // sun
+  const sx=820-cam*0.05, sy=120;
+  px(sx-22,sy-22,44,44,'#fff1a8');
+  px(sx-30,sy-14,60,28,'#fff1a8');
+  px(sx-14,sy-30,28,60,'#fff1a8');
+  px(sx-16,sy-16,32,32,'#ffe25a');
+  // clouds (blocky)
+  cloud(120-cam*0.12, 90); cloud(520-cam*0.12,140); cloud(900-cam*0.12,70);
+  cloud(1300-cam*0.12,120);
+}
+function cloud(x,y){
+  if(x< -160) x += Math.ceil((-160-x)/(W+200))*(W+200);
+  x = ((x % (W+200))+(W+200))%(W+200);
+  ctx.fillStyle='#ffffff';
+  px(x,y,90,26,'#ffffff'); px(x+16,y-16,60,26,'#ffffff'); px(x+40,y-6,70,30,'#ffffff');
+  px(x,y+18,120,10,'#dff0ff');
+}
+
+function drawBackground(){ level.theme==='site'? drawSite() : drawDunes(); }
+
+// ---- ACTO I background: obra ----
+function drawSite(){
+  // far city blocks
+  for(let i=0;i<16;i++){
+    let bx=(i*150 - cam*0.18); bx=((bx%(W+220))+(W+220))%(W+220);
+    const bh=70+((i*53)%120);
+    px(bx,GROUND_Y-bh,92,bh,'#6d7f9a');
+    px(bx,GROUND_Y-bh,92,6,'#8094ad');
+  }
+  // mid buildings under construction
+  for(let i=0;i<9;i++){
+    let bx=(i*270 - cam*0.34); bx=((bx%(W+320))+(W+320))%(W+320);
+    const bh=150+((i*71)%150);
+    px(bx,GROUND_Y-bh,132,bh,'#94a6bf');
+    px(bx,GROUND_Y-bh,132,8,'#b4c4da');
+    for(let f=GROUND_Y-bh+22; f<GROUND_Y; f+=22){ px(bx,f,132,3,'#7a8ba6'); }
+    for(let wx=bx+12; wx<bx+120; wx+=26){ for(let wy=GROUND_Y-bh+10; wy<GROUND_Y-14; wy+=22) px(wx,wy,14,12,'#cfe0f2'); }
+  }
+  // crane near goal
+  const cx=level.goal.x-cam*0.6+40;
+  if(cx>-260 && cx<W+260){
+    px(cx-6,80,12,GROUND_Y-80,'#f4b400');
+    px(cx-3,80,3,GROUND_Y-80,'#ffd75e');
+    px(cx-44,90,310,10,'#f4b400'); px(cx-44,98,310,3,'#c98f00');
+    // hook
+    const hook=100+Math.sin(frame*0.02)*8;
+    px(cx+208,100,2,hook+50,'#cfcfcf'); px(cx+202,hook+150,12,10,'#aab2bb');
+  }
+}
+
+// ---- ACTO II background: Cabo Polonio + faro ----
+function drawDunes(){
+  // sea band
+  px(0,GROUND_Y-70,W,90,'#1f8fb0');
+  px(0,GROUND_Y-70,W,8,'#56c4dd');
+  for(let i=0;i<W;i+=40){ px(i-((cam*0.4)%40), GROUND_Y-50+Math.sin(i*0.1+frame*0.05)*4, 20,4,'#7fd8ec'); }
+
+  // distant green dunes
+  for(let i=0;i<14;i++){
+    let dx=(i*180 - cam*0.22); dx=((dx%(W+260))+(W+260))%(W+260);
+    px(dx,GROUND_Y-60,180,80,'#6cab3e'); px(dx,GROUND_Y-60,180,8,'#86c452');
+  }
+  // rustic little houses of Cabo Polonio dotted on the dunes
+  const houses=[[700,'#e8d7b0','#b5483a'],[1500,'#cfe0e8','#6b7f8c'],[2400,'#efe2c4','#caa24a'],[3700,'#e3cdb0','#7a5a44'],[4400,'#dfe6d6','#b5483a']];
+  for(const [hx,wall,roof] of houses){
+    const x=hx-cam*0.4; if(x<-60||x>W+60) continue;
+    const by=GROUND_Y-58;
+    px(x,by-18,40,18,wall); px(x,by-18,40,3,'#ffffff');           // wall
+    px(x-3,by-26,46,9,roof);                                       // roof
+    px(x+6,by-12,8,12,'#6b5840'); px(x+24,by-12,9,8,'#9fc6d6');   // door + window
+  }
+
+  // ---- THE LIGHTHOUSE (faithful: pale tapered tower, gallery, dark lantern dome) ----
+  const lx=level.goal.x-cam+40, base=GROUND_Y-6;
+  if(lx>-160 && lx<W+220){
+    // rocky base with sea lions
+    px(lx-90,base-30,200,40,'#7d756b'); px(lx-90,base-30,200,8,'#968d80');
+    seaLion(lx-70,base-10,-1); seaLion(lx+60,base-12,1); seaLion(lx-10,base-6,1);
+    // tower (tapered, pale)
+    const th=240, topW=46, botW=78;
+    for(let yy=0; yy<th; yy+=6){
+      const t=yy/th, w=botW+(topW-botW)*t;
+      px(lx-w/2, base-30-yy, w, 6, yy%24<12?'#f1ede4':'#e3ddd0');
+    }
+    // gallery
+    px(lx-topW/2-8, base-30-th, topW+16, 12,'#9a9488');
+    px(lx-topW/2-8, base-30-th+12, topW+16, 6,'#6f695e');
+    // lantern room
+    px(lx-22, base-30-th-30, 44, 30,'#cfe7f2');
+    ctx.fillStyle='#163a4a';
+    for(let gx=lx-18; gx<lx+18; gx+=10) px(gx,base-30-th-30,4,30,'#163a4a');
+    // dark dome
+    px(lx-26, base-30-th-44, 52, 14,'#7a2630');
+    px(lx-16, base-30-th-54, 32, 12,'#7a2630');
+    px(lx-6, base-30-th-60, 12, 8,'#5a1a22');
+    // rotating beam
+    const b=(Math.sin(frame*0.03)+1)/2;
+    ctx.fillStyle=`rgba(255,238,150,${0.12+b*0.18})`;
+    ctx.beginPath(); ctx.moveTo(lx,base-30-th-15);
+    ctx.lineTo(lx+260,base-30-th-90); ctx.lineTo(lx+260,base-30-th+60); ctx.closePath(); ctx.fill();
+    px(lx-5,base-30-th-20,10,10,'#fff3b0');
+  }
+}
+function seaLion(x,y,dir){
+  px(x-16,y-10,32,12,'#5b6670');      // body
+  px(x+(dir>0?10:-18),y-16,12,10,'#5b6670'); // head
+  px(x+(dir>0?18:-18),y-14,2,2,'#1c2126'); // eye
+  px(x-14,y-2,8,4,'#46525c');         // flipper
+}
+
+// ---- ground ----
+function drawGround(){
+  // water/void fill in gaps first
+  const c = level.theme==='dunes' ? ['#1f6f8c','#2f96b2'] : ['#222a36','#3a4658'];
+  let cursor=0; const segs=[...level.ground].sort((a,b)=>a[0]-b[0]);
+  for(const s of segs){
+    if(s[0]>cursor){
+      const gx=cursor-cam, gw=s[0]-cursor;
+      if(gx+gw>0&&gx<W){
+        px(gx,GROUND_Y+4,gw,GROUND_H,c[0]); px(gx,GROUND_Y+4,gw,8,c[1]);
+        if(level.theme==='dunes') for(let i=0;i<3;i++) px(gx,GROUND_Y+16+i*18+Math.sin(frame*0.06+i)*2,gw,2,'#7fd8ec');
+      }
+    }
+    cursor=Math.max(cursor,s[0]+s[1]);
+  }
+  // solid ground segments
+  for(const g of level.ground){
+    const x=g[0]-cam,w=g[1]; if(x+w<0||x>W) continue;
+    if(level.theme==='dunes'){
+      px(x,GROUND_Y,w,GROUND_H,'#d9b070');          // sand
+      px(x,GROUND_Y,w,10,'#f0d49a');
+      px(x,GROUND_Y,w,5,'#5fae3a');                 // grass lip
+      for(let i=x+6;i<x+w;i+=14) px(i,GROUND_Y-4,3,5,'#5fae3a'); // grass tufts
+      for(let i=x+10;i<x+w;i+=30) px(i,GROUND_Y+24,4,4,'#c79a5c');
+    } else {
+      px(x,GROUND_Y,w,GROUND_H,'#8a939e');           // concrete
+      px(x,GROUND_Y,w,8,'#aeb6bf');
+      px(x,GROUND_Y,w,4,'#cfd5db');
+      for(let i=x+8;i<x+w;i+=26) px(i,GROUND_Y+16,3,GROUND_H-22,'#6f7782'); // rebar dashes
+    }
+  }
+}
+
+function drawPlatform(p){
+  const x=p.x-cam,y=p.y; if(x+p.w<0||x>W) return;
+  const map={
+    rock:['#8d7a68','#a08c78','#6b5a4a'],
+    wood:['#9a6b40','#b5824f','#6e4a28'],
+    beam:['#8794a1','#a8b4c0','#5f6b78'],
+    slab:['#cdc7bb','#e2ddd2','#9c968a'],
+    scaffold:['#c9cdd3','#e6e9ed','#8b9098']
+  };
+  const c=map[p.t]||map.rock;
+  px(x,y,p.w,p.h+8,c[2]); px(x,y,p.w,p.h,c[0]); px(x,y,p.w,4,c[1]);
+  if(p.t==='beam') for(let i=x+10;i<x+p.w;i+=22) px(i,y+p.h/2-1,3,3,c[2]);
+  if(p.t==='wood') for(let i=x+8;i<x+p.w;i+=20) px(i,y,2,p.h,c[2]);
+  if(p.t==='scaffold'){ px(x,y,3,p.h,c[2]); px(x+p.w-3,y,3,p.h,c[2]); }
+}
+
+function drawTramp(t){
+  const x=t.x-cam,y=t.y; if(x+80<0||x-80>W) return;
+  // suspensión capilar: rigging giratorio + cabello trenzado (sin telas). la argolla queda a la altura de impulso (t.y)
+  const rf=(Math.floor(frame/20)%2)?'rig_b':'rig_a';
+  spr(rf, x-28, y-70);
+}
+
+// ---- collectibles ----
+function drawItem(s){
+  if(s.got) return;
+  const x=s.x-cam, y=s.y+Math.sin(frame*0.06+s.x)*4; if(x<-30||x>W+30) return;
+  spr(s.kind, x-16, y-16);   // 16x16 native -> 32x32, centered
+}
+
+// ---- enemies ----
+function drawEnemy(e){
+  if(e.dead) return;
+  const x=e.x-cam,y=e.y; if(x<-60||x>W+60) return;
+  if(e.kind==='seal'){
+    const f=(Math.floor(frame/16)%2)?'seal_b':'seal_a';   // 24x16 -> 48x32, base on ground
+    if(e.dir>0) spr(f, x-5, y-2); else sprFlip(f, x-5, y-2);
+  } else {
+    const wob=Math.sin(frame*0.18+e.x)*0.05;               // 16x22 -> 32x44
+    ctx.save(); ctx.translate(x+19, y+30); ctx.rotate(wob); ctx.translate(-(x+19),-(y+30));
+    spr('cone', x+3, y-14);
+    ctx.restore();
+  }
+}
+
+// ---- cats: Onix (all black) & Runa (mostly black, few orange spots) ----
+function drawCat(c){
+  const x=c.x-cam, y=c.y; if(x<-50||x>W+50) return;
+  const f=(Math.floor(frame/30)%2)?'_b':'_a';
+  spr(c.who+f, x-22, y-38);   // 22x20 native -> 44x40, feet on surface
+  // heart when Mica is near
+  const d=Math.abs((player.x+15)-c.x);
+  if(d<90 && state==='play'){
+    const hy=y-58-Math.abs(Math.sin(frame*0.1))*6;
+    px(x-2,hy,4,4,'#ff5b8a'); px(x-6,hy-2,4,4,'#ff5b8a'); px(x+2,hy-2,4,4,'#ff5b8a');
+    px(x-4,hy+2,8,4,'#ff5b8a'); px(x-2,hy+6,4,4,'#ff5b8a');
+  }
+}
+
+// ---- goal ----
+function drawGoal(){
+  const x=level.goal.x-cam;
+  if(x<-120||x>W+120) return;
+  if(level.goal.kind==='flag'){
+    px(x,GROUND_Y-130,38,130,'#6b7480'); px(x,GROUND_Y-130,38,8,'#8b95a1');
+    px(x+18,GROUND_Y-200,4,72,'#2c2030');
+    const fl=Math.sin(frame*0.1)*5;
+    ctx.fillStyle='#ffd23f';
+    ctx.beginPath(); ctx.moveTo(x+22,GROUND_Y-200); ctx.lineTo(x+58,GROUND_Y-192+fl); ctx.lineTo(x+22,GROUND_Y-180); ctx.closePath(); ctx.fill();
+  } else {
+    // ===== MAURI esperando al pie del faro (sprite detallado) =====
+    const mx=x+20, my=GROUND_Y;
+    ctx.fillStyle='rgba(0,0,0,.18)'; px(mx-16,my+1,32,5,'rgba(0,0,0,.18)');
+    spr('mauri', mx-22, my-72);   // 22x36 native -> 44x72, pies en el suelo
+    // corazón flotando entre los dos
+    const hy=my-92-Math.abs(Math.sin(frame*0.08))*5;
+    px(mx-2,hy,5,5,'#ff5b8a'); px(mx-7,hy-3,5,5,'#ff5b8a'); px(mx+3,hy-3,5,5,'#ff5b8a');
+    px(mx-4,hy+3,10,5,'#ff5b8a'); px(mx-1,hy+8,5,5,'#ff5b8a');
+  }
+}
+
+// ---- MICA: sprites a mano (idle / correr / salto / vertical / suspensión capilar) ----
+function drawMica(name){
+  const im=IMG[name]; if(!im||!im.complete||!im.naturalWidth) return;
+  const w=im.naturalWidth*SS, h=im.naturalHeight*SS;
+  const cxp=player.x-cam+player.w/2, by=player.y+player.h;
+  ctx.imageSmoothingEnabled=false; ctx.save();
+  ctx.translate(cxp,by);
+  if(player.spinning) ctx.rotate(player.spin*player.face);
+  ctx.scale(player.face,1);
+  ctx.drawImage(im,-w/2,-h,w,h);
+  ctx.restore();
+}
+function drawPlayer(){
+  const p=player;
+  if(p.invuln>0 && Math.floor(frame/4)%2===0) return;
+  let name='mica_idle';
+  if(p.hairhang>0) name='mica_hairhang';              // recién impulsada por la suspensión capilar
+  else if(!p.onGround) name='mica_jump';              // grand jeté
+  else if(Math.abs(p.vx)>0.4) name=(Math.floor(frame/8)%2)?'mica_run_b':'mica_run_a';
+  else if(p.idleT>110) name='mica_vertical';          // quieta un rato -> hace la vertical
+  drawMica(name);
+  if(p.onGround && p.hairhang<=0){ ctx.fillStyle='rgba(0,0,0,.18)'; px(p.x-cam+1,p.y+p.h+1,p.w-2,4,'rgba(0,0,0,.18)'); }
+}
+
+// ---- props de obra en construcción (solo nivel obra) ----
+const SITEPROPS=[
+  {x:700,n:'mixer',w:52,h:48},{x:1250,n:'bricks',w:48,h:32},{x:1900,n:'barrier',w:52,h:32},
+  {x:2700,n:'wheelbarrow',w:48,h:36},{x:3500,n:'bricks',w:48,h:32},{x:4050,n:'barrier',w:52,h:32},
+  {x:4700,n:'mixer',w:52,h:48},{x:5050,n:'wheelbarrow',w:48,h:36}
+];
+function drawSiteProps(){
+  if(level.theme!=='site') return;
+  for(const pr of SITEPROPS){
+    const x=pr.x-cam; if(x+pr.w<0||x>W) continue;
+    spr(pr.n, x, GROUND_Y-pr.h);
+  }
+}
+
+function render(){
+  clear(); if(!level) return;
+  drawSky(); drawBackground(); drawGround(); drawSiteProps();
+  for(const t of level.tramps) drawTramp(t);
+  for(const p of level.platforms) drawPlatform(p);
+  drawGoal();
+  for(const c of level.cats) drawCat(c);
+  for(const s of level.items) drawItem(s);
+  for(const e of level.enemies) drawEnemy(e);
+  drawPlayer();
+}
+
+function loop(){ update(); render(); requestAnimationFrame(loop); }
+
+// ---------- Screen flow ----------
+const titleScreen=document.getElementById('titleScreen');
+const interScreen=document.getElementById('interludeScreen');
+const winScreen=document.getElementById('winScreen');
+const hud=document.getElementById('hud');
+const fadeEl=document.getElementById('fade');
+const show=el=>el.classList.remove('hidden'), hide=el=>el.classList.add('hidden');
+
+function fadeTo(cb){ fadeEl.classList.add('on'); setTimeout(()=>{cb();fadeEl.classList.remove('on');},480); }
+function flash(){ fadeEl.style.background='#7a1d3a'; fadeEl.classList.add('on');
+  setTimeout(()=>{ fadeEl.classList.remove('on'); setTimeout(()=>fadeEl.style.background='#0a0a14',280); },180); }
+
+function startGame(){ lives=3; levelIdx=0; loadLevel(0); state='play'; hide(titleScreen); hud.style.opacity=1; updateHUD(); }
+function showInterlude(){
+  state='interlude';
+  document.getElementById('interKicker').textContent='ACTO I — LA OBRA, LISTO';
+  document.getElementById('interTitle').textContent='II · CABO POLONIO';
+  document.getElementById('interText').textContent=
+    'De los andamios a los médanos. Ahora el faro al fondo, los lobos en el roquerío y los aparatos de suspensión capilar que te impulsan más alto. Quedate quieta un momento y Mica hace la vertical. Caminá hacia la torre: al final del camino hay alguien esperándote.';
+  show(interScreen);
+}
+function showWin(){
+  state='win';
+  document.getElementById('winText').textContent=
+    'Llegaste al faro, y ahí estaba yo. Lo armé entero para vos, Mica — y como todo lo mío, se puede seguir editando. Gracias por bailarlo hasta acá.';
+  hud.style.opacity=0; show(winScreen);
+}
+
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('interBtn').addEventListener('click',()=>{ hide(interScreen); fadeTo(()=>{ loadLevel(1); state='play'; updateHUD(); }); });
+document.getElementById('winBtn').addEventListener('click',()=>{ hide(winScreen); show(titleScreen); state='title'; });
+
+loop();
+})();
+</script>
+</body>
+</html>
